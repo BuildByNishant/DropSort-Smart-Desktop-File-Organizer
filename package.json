@@ -1,0 +1,68 @@
+{
+  "name": "dropsort",
+  "productName": "DropSort",
+  "version": "1.0.0",
+  "description": "DropSort - Smart Desktop File Organizer for macOS",
+  "author": "DropSort",
+  "license": "MIT",
+  "private": true,
+  "main": "electron/main.js",
+  "scripts": {
+    "dev": "concurrently -k -n vite,electron \"vite\" \"wait-on tcp:127.0.0.1:5173 && DROPSORT_DEV=1 electron .\"",
+    "build": "vite build",
+    "start": "npm run build && electron .",
+    "test": "node --test",
+    "dist:mac": "npm run build && electron-builder --mac dmg",
+    "dist:dir": "npm run build && electron-builder --mac dir",
+    "test:ui": "node tests/ui-smoke.mjs",
+    "rebuild": "electron-builder install-app-deps"
+  },
+  "build": {
+    "appId": "com.dropsort.desktop",
+    "productName": "DropSort",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "package.json"
+    ],
+    "asarUnpack": [
+      "**/node_modules/better-sqlite3/**"
+    ],
+    "mac": {
+      "target": [
+        "dmg"
+      ],
+      "category": "public.app-category.utilities",
+      "icon": "build/icon.png",
+      "extendInfo": {
+        "NSDownloadsFolderUsageDescription": "DropSort needs access to your Downloads folder to scan and organize the files you choose.",
+        "NSDesktopFolderUsageDescription": "DropSort needs access to your Desktop folder to scan and organize the files you choose.",
+        "NSDocumentsFolderUsageDescription": "DropSort needs access to your Documents folder to scan and organize the files you choose.",
+        "NSRemovableVolumesUsageDescription": "DropSort needs access to external drives you choose to scan and organize their files.",
+        "NSNetworkVolumesUsageDescription": "DropSort needs access to network folders you choose to scan and organize their files."
+      }
+    },
+    "dmg": {
+      "title": "DropSort ${version}"
+    }
+  },
+  "dependencies": {
+    "better-sqlite3": "^13.2.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.3.5",
+    "@vitejs/plugin-react": "^6.3.0",
+    "concurrently": "^10.0.7",
+    "electron": "^45.3.3",
+    "electron-builder": "^26.18.0",
+    "tailwindcss": "^4.3.5",
+    "vite": "^8.3.8",
+    "wait-on": "^9.5.1"
+  }
+}

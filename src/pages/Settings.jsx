@@ -1,0 +1,187 @@
+import { useEffect, useState } from 'react';
+import { useApp } from '../hooks/AppContext.jsx';
+import { categoryMeta } from '../utils/categories.js';
+import Button from '../components/Button.jsx';
+import Card from '../components/Card.jsx';
+import PageHeader from '../components/PageHeader.jsx';
+import { LAYOUT_OPTIONS } from '../utils/layouts.js';
+
+const clone = (o) => JSON.parse(JSON.stringify(o));
+const EXT_RE = /^[a-z0-9][a-z0-9_+-]{0,14}$/;
+
+function Row({ label, hint, children }) {
+  return (
+    <div className="flex items-center justify-between gap-6 py-2.5">
+      <div><div className="text-sm font-medium">{label}</div>{hint && <div className="text-xs text-muted">{hint}</div>}</div>
+      <div className="shrink-0">{children}</div>
+    </div>
+  );
+}
+const selectCls = 'rounded-lg border border-line bg-surface px-2 py-1 text-sm';
+
+function CategoryEditor({ categories, onChange, notify }) {
+  const [drafts, setDrafts] = useState({});
+  const [newName, setNewName] = useState('');
+
+  function addExt(category) {
+    const ext = (drafts[category] || '').trim().toLowerCase().replace(/^\.+/, '');
+    if (!ext) return;
+    if (!EXT_RE.test(ext)) return notify(`"${ext}" is not a valid extension. Use letters and numbers only.`);
+    const next = clone(categories);
+    const previous = Object.keys(next).find((c) => next[c].includes(ext));
+    if (previous === category) return setDrafts((d) => ({ ...d, [category]: '' }));
+    if (previous) next[previous] = next[previous].filter((e) => e !== ext);
+    next[category] = [...next[category], ext];
+    onChange(next);
+    setDrafts((d) => ({ ...d, [category]: '' }));
+    if (previous) notify(`.${ext} moved from ${previous} to ${category}.`);
+  }
+  function removeExt(category, ext) {
+    const next = clone(categories);
+    next[category] = next[category].filter((e) => e !== ext);
+    onChange(next);
+  }
+  function addCategory() {
+    const name = newName.replace(/[/\\:*?"<>|]/g, '').replace(/^\.+/, '').trim();
+    if (!name) return;
+    if (name.toLowerCase() === 'others') return notify('"Others" is built in and always exists.');
+    if (Object.keys(categories).some((c) => c.toLowerCase() === name.toLowerCase())) return notify('A category with that name already exists.');
+    onChange({ ...categories, [name]: [] });
+    setNewName('');
+  }
+  function removeCategory(category) {
+    const next = clone(categories);
+    delete next[category];
+    onChange(next);
+  }
+
+  return (
+    <div className="space-y-3">
+      {Object.entries(categories).map(([name, exts]) => {
+        const { icon, color } = categoryMeta(name);
+        return (
+          <div key={name} className="rounded-lg border border-line p-3">
+            <div className="mb-2 flex items-center justify-between">
+              <span className="text-sm font-medium">{icon} {name}</span>
+              <Button size="sm" variant="ghost" onClick={() => removeCategory(name)} aria-label={`Delete category ${name}`}>Delete</Button>
+            </div>
+            <div className="flex flex-wrap items-center gap-1.5">
+              {exts.map((e) => (
+                <span key={e} className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 font-mono text-xs" style={{ color, backgroundColor: `${color}1f` }}>
+                  .{e}
+                  <button onClick={() => removeExt(name, e)} aria-label={`Remove .${e} from ${name}`} className="opacity-60 hover:opacity-100">×</button>
+                </span>
+              ))}
+              <input
+                value={drafts[name] || ''}
+                onChange={(e) => setDrafts((d) => ({ ...d, [name]: e.target.value }))}
+                onKeyDown={(e) => e.key === 'Enter' && addExt(name)}
+                placeholder="add ext"
+                aria-label={`Add an extension to ${name}`}
+                className="w-20 rounded border border-line bg-surface px-1.5 py-0.5 font-mono text-xs"
+              />
+            </div>
+          </div>
+        );
+      })}
+      <div className="flex items-center gap-2">
+        <input value={newName} onChange={(e) => setNewName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && addCategory()} placeholder="New category name" aria-label="New category name" className="w-56 rounded-lg border border-line bg-surface px-3 py-1.5 text-sm" />
+        <Button onClick={addCategory}>Add category</Button>
+      </div>
+      <p className="text-xs text-muted">Files whose extension is not listed go to "Others". An extension can belong to only one category.</p>
+    </div>
+  );
+}
+
+export default function Settings() {
+  const { settings, defaultCategories, saveSettings, toast, setTourOpen } = useApp();
+  const [draft, setDraft] = useState(() => clone(settings));
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => setDraft(clone(settings)), [settings]);
+
+  const dirty = JSON.stringify(draft) !== JSON.stringify(settings);
+  const set = (key, value) => setDraft((d) => ({ ...d, [key]: value }));
+
+  async function save() {
+    setSaving(true);
+    try {
+      const payload = { ...draft };
+      delete payload.lastDestination; // managed by the app
+      await saveSettings(payload);
+      toast('Settings saved.', 'success');
+    } catch (err) {
+      toast(err.message, 'error');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="mx-auto max-w-3xl">
+      <PageHeader
+        title="Settings"
+        actions={
+          <>
+            <Button disabled={!dirty || saving} onClick={() => setDraft(clone(settings))}>Discard</Button>
+            <Button variant="primary" disabled={!dirty || saving} onClick={save}>Save changes</Button>
+          </>
+        }
+      />
+
+      <Card title="Appearance and help" className="mb-4">
+        <Row label="Quick tour" hint="A 30-second walkthrough of how DropSort works.">
+          <Button onClick={() => setTourOpen(true)}>Show tour</Button>
+        </Row>
+        <Row label="Theme" hint="Follow macOS, or choose light or dark.">
+          <select className={selectCls} value={draft.theme} onChange={(e) => set('theme', e.target.value)} aria-label="Theme">
+            <option value="system">Match system</option>
+            <option value="light">Light</option>
+            <option value="dark">Dark</option>
+          </select>
+        </Row>
+      </Card>
+
+      <Card title="Scanning" className="mb-4">
+        <div className="divide-y divide-line">
+          <Row label="Scan subfolders by default" hint="Off by default. You can still change it per scan.">
+            <input type="checkbox" checked={draft.recursiveScan} onChange={(e) => set('recursiveScan', e.target.checked)} aria-label="Scan subfolders by default" />
+          </Row>
+          <Row label="Include hidden files by default" hint="Files whose names start with a dot.">
+            <input type="checkbox" checked={draft.includeHidden} onChange={(e) => set('includeHidden', e.target.checked)} aria-label="Include hidden files by default" />
+          </Row>
+        </div>
+      </Card>
+
+      <Card title="Organizing" className="mb-4">
+        <div className="divide-y divide-line">
+          <Row label="When a file name already exists" hint="Files are never overwritten.">
+            <select className={selectCls} value={draft.conflictPolicy} onChange={(e) => set('conflictPolicy', e.target.value)} aria-label="Conflict policy">
+              <option value="rename">Rename: file (1).ext</option>
+              <option value="skip">Skip the file</option>
+            </select>
+          </Row>
+          <Row label="Default sorting style" hint="How files are arranged inside the destination.">
+            <select className={selectCls} value={draft.layout} onChange={(e) => set('layout', e.target.value)} aria-label="Default sorting style">
+              {LAYOUT_OPTIONS.map((o) => <option key={o.id} value={o.id}>{o.title}</option>)}
+            </select>
+          </Row>
+          <Row label="Default destination" hint="How the destination folder is chosen.">
+            <select className={selectCls} value={draft.destinationMode} onChange={(e) => set('destinationMode', e.target.value)} aria-label="Default destination">
+              <option value="choose">Choose each time</option>
+              <option value="remember">Start in my last destination</option>
+              <option value="in-place">Organize in place</option>
+            </select>
+          </Row>
+        </div>
+      </Card>
+
+      <Card
+        title="Category rules"
+        action={<Button size="sm" onClick={() => set('categories', clone(defaultCategories))}>Reset to defaults</Button>}
+      >
+        <CategoryEditor categories={draft.categories} onChange={(c) => set('categories', c)} notify={(m) => toast(m)} />
+      </Card>
+    </div>
+  );
+}

@@ -1,12 +1,14 @@
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
-const { classifyFile, layoutSegments } = require('./categorizer');
+const { classifyFile, compileRules, layoutSegments } = require('./categorizer');
 const { friendlyError } = require('./errors');
 const { hashFile } = require('./hash');
 
 const MOVABLE = new Set(['ready', 'renamed']);
 const isMovable = (item) => MOVABLE.has(item.status);
+const CASE_INSENSITIVE_FS = process.platform === 'darwin' || process.platform === 'win32';
+const normPath = (p) => (CASE_INSENSITIVE_FS ? p.toLowerCase() : p);
 
 // Errors that mean "hard links are not possible here" (different volume, exFAT, ...).
 const LINK_FALLBACK_CODES = new Set(['EXDEV', 'EPERM', 'ENOTSUP', 'EOPNOTSUPP', 'ENOSYS', 'EMLINK']);
@@ -15,7 +17,7 @@ const HASH_VERIFY_LIMIT = 50 * 1024 * 1024; // verify checksum of copies up to 5
 // ---------------------------------------------------------------- helpers
 
 function isInside(child, parent) {
-  const rel = path.relative(parent, child);
+  const rel = path.relative(normPath(parent), normPath(child));
   return Boolean(rel) && !rel.startsWith('..') && !path.isAbsolute(rel);
 }
 
@@ -113,10 +115,12 @@ async function buildPlan({
   files, sourceRoot, destinationRoot, extensionMap, rules = [], layout = 'type', conflictPolicy = 'rename', now = Date.now(),
 }) {
   const reserved = new Set(); // lower-cased destinations already claimed by this plan (macOS is case-insensitive)
+  const compiledRules = compileRules(rules);
+  const sameRoot = normPath(destinationRoot) === normPath(sourceRoot);
   const items = [];
 
   for (const file of files) {
-    const { category, ruleName } = classifyFile(file, { extensionMap, rules, now });
+    const { category, ruleName } = classifyFile(file, { extensionMap, compiledRules, now });
     const destinationDir = path.join(destinationRoot, ...layoutSegments(layout, category, file.mtimeMs));
     const intended = path.join(destinationDir, file.name);
 
@@ -139,7 +143,7 @@ async function buildPlan({
     if (file.path.toLowerCase() === intended.toLowerCase()) {
       item.status = 'in-place';
       item.note = 'Already in the right folder';
-    } else if (destinationRoot !== sourceRoot && isInside(file.path, destinationRoot)) {
+    } else if (!sameRoot && isInside(file.path, destinationRoot)) {
       item.status = 'in-destination';
       item.note = 'Already inside the destination folder';
     } else if (reserved.has(intended.toLowerCase()) || (await pathExists(intended))) {
@@ -200,6 +204,7 @@ function summarizePlan(items, newFolders = []) {
  */
 async function executePlan({ items, conflictPolicy = 'rename', onProgress, onResult }) {
   const results = [];
+  const counts = { planned: items.length, moved: 0, skipped: 0, failed: 0 };
   let abortReason = null;
 
   for (let i = 0; i < items.length; i += 1) {
@@ -215,6 +220,10 @@ async function executePlan({ items, conflictPolicy = 'rename', onProgress, onRes
       if (result.code === 'ENOSPC') abortReason = 'Stopped because the disk is full.';
     }
 
+    if (result.status === 'moved') counts.moved += 1;
+    else if (result.status === 'failed') counts.failed += 1;
+    else counts.skipped += 1;
+
     if (onResult) {
       try {
         await onResult(result);
@@ -227,7 +236,7 @@ async function executePlan({ items, conflictPolicy = 'rename', onProgress, onRes
     results.push(result);
     if (onProgress) onProgress({ done: i + 1, total: items.length, currentName: item.name });
   }
-  return { results, counts: tally(results) };
+  return { results, counts };
 }
 
 function makeResult(item, status, error = null, destination = item.destination, code = null) {
@@ -282,16 +291,6 @@ async function moveItem(item, conflictPolicy) {
   }
 }
 
-function tally(results) {
-  const counts = { planned: results.length, moved: 0, skipped: 0, failed: 0 };
-  for (const r of results) {
-    if (r.status === 'moved') counts.moved += 1;
-    else if (r.status === 'failed') counts.failed += 1;
-    else counts.skipped += 1;
-  }
-  return counts;
-}
-
 function sessionStatus(counts) {
   if (counts.failed > 0 && counts.moved === 0) return 'failed';
   if (counts.failed > 0) return 'partial';
@@ -308,6 +307,5 @@ module.exports = {
   buildPlan,
   summarizePlan,
   executePlan,
-  tally,
   sessionStatus,
 };

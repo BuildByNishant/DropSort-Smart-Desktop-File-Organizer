@@ -20,7 +20,7 @@ const FALLBACK_CATEGORY = 'Others';
 const EXTENSION_RE = /^[a-z0-9][a-z0-9_+-]{0,14}$/;
 
 function cloneDefaults() {
-  return JSON.parse(JSON.stringify(DEFAULT_CATEGORIES));
+  return structuredClone(DEFAULT_CATEGORIES);
 }
 
 // "PDF", ".pdf" -> "pdf"
@@ -136,20 +136,35 @@ function validateRules(input) {
   });
 }
 
-function ruleMatches(rule, file, now) {
+function prepareRule(rule) {
+  const folder = sanitizeFolderName(rule.folder) || FALLBACK_CATEGORY;
+  if (rule.field === 'name' || rule.field === 'extension') {
+    const needles = String(rule.value || '')
+      .split(',')
+      .map((v) => v.trim().toLowerCase())
+      .filter(Boolean);
+    return { ...rule, folder, needles };
+  }
+  return { ...rule, folder };
+}
+
+function compileRules(rules = []) {
+  return rules.filter((r) => r.enabled !== false).map(prepareRule);
+}
+
+function matchPreparedRule(rule, file, now) {
   switch (rule.field) {
     case 'name': {
-      const name = file.name.toLowerCase();
-      return rule.value.split(',').some((v) => {
-        const needle = v.trim().toLowerCase();
-        if (!needle) return false;
-        if (rule.op === 'startsWith') return name.startsWith(needle);
-        if (rule.op === 'endsWith') return path.parse(name).name.endsWith(needle) || name.endsWith(needle);
-        return name.includes(needle);
+      const lower = file.name.toLowerCase();
+      const stem = rule.op === 'endsWith' ? path.parse(lower).name : null;
+      return rule.needles.some((needle) => {
+        if (rule.op === 'startsWith') return lower.startsWith(needle);
+        if (rule.op === 'endsWith') return stem.endsWith(needle) || lower.endsWith(needle);
+        return lower.includes(needle);
       });
     }
     case 'extension':
-      return rule.value.split(',').includes(normalizeExtension(path.extname(file.name)));
+      return rule.needles.includes(normalizeExtension(path.extname(file.name)));
     case 'size':
       return file.size > rule.value * 1e6;
     case 'age':
@@ -159,11 +174,17 @@ function ruleMatches(rule, file, now) {
   }
 }
 
+function ruleMatches(rule, file, now) {
+  return matchPreparedRule(rule.needles ? rule : prepareRule(rule), file, now);
+}
+
 // Decides a file's category folder: first matching enabled rule, else its extension category, else Others.
-function classifyFile(file, { extensionMap, rules = [], now = Date.now() }) {
-  for (const rule of rules) {
-    if (rule.enabled !== false && ruleMatches(rule, file, now)) {
-      return { category: sanitizeFolderName(rule.folder) || FALLBACK_CATEGORY, ruleId: rule.id, ruleName: rule.name };
+// Pass pre-compiled rules (via compileRules) when classifying many files.
+function classifyFile(file, { extensionMap, rules = [], compiledRules, now = Date.now() }) {
+  const active = compiledRules || compileRules(rules);
+  for (const rule of active) {
+    if (matchPreparedRule(rule, file, now)) {
+      return { category: rule.folder, ruleId: rule.id, ruleName: rule.name };
     }
   }
   return { category: categorize(file.name, extensionMap), ruleId: null, ruleName: null };
@@ -205,6 +226,7 @@ module.exports = {
   RULE_OPS,
   MAX_RULES,
   validateRules,
+  compileRules,
   ruleMatches,
   classifyFile,
   LAYOUTS,

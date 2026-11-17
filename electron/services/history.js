@@ -21,12 +21,30 @@ function createHistory(db) {
   );
   const insertOperation = db.prepare(
     `INSERT INTO file_operations
-       (session_id, original_path, destination_path, file_name, file_size, sha256, status, error_message, category, created_at)
-     VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?, ?)`
+       (session_id, original_path, destination_path, file_name, file_size, status, error_message, category, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
   );
   const getOperationRow = db.prepare('SELECT * FROM file_operations WHERE id = ?');
   const markReversed = db.prepare(`UPDATE file_operations SET status = 'reversed', error_message = NULL WHERE id = ?`);
   const markBlocked = db.prepare('UPDATE file_operations SET error_message = ? WHERE id = ?');
+  const getMovableOpsForSession = db.prepare(
+    `SELECT id FROM file_operations WHERE session_id = ? AND status = 'moved' ORDER BY id DESC`
+  );
+  const getDashboardTotals = db.prepare(
+    `SELECT (SELECT COUNT(*) FROM organization_sessions) AS sessions,
+            (SELECT COUNT(*) FROM file_operations WHERE status = 'moved')    AS moved,
+            (SELECT COUNT(*) FROM file_operations WHERE status = 'reversed') AS reversed`
+  );
+  const getDashboardCategories = db.prepare(
+    `SELECT COALESCE(category, 'Others') AS category, COUNT(*) AS count, COALESCE(SUM(file_size), 0) AS bytes
+       FROM file_operations WHERE status = 'moved' GROUP BY category ORDER BY count DESC`
+  );
+  const checkKnownOpPath = db.prepare(
+    'SELECT 1 FROM file_operations WHERE original_path = ? OR destination_path = ? LIMIT 1'
+  );
+  const checkKnownScanPath = db.prepare(
+    'SELECT 1 FROM scans WHERE source_folder = ? OR destination_root = ? LIMIT 1'
+  );
 
   // A session starts as "partial" so a crash mid-way is never reported as a clean success.
   const createSession = db.transaction(({ sourceFolder, destinationRoot, totalFiles, totalPlanned }) => {
@@ -122,9 +140,7 @@ function createHistory(db) {
   }
 
   async function undoSession(sessionId) {
-    const ops = db
-      .prepare(`SELECT id FROM file_operations WHERE session_id = ? AND status = 'moved' ORDER BY id DESC`)
-      .all(sessionId);
+    const ops = getMovableOpsForSession.all(sessionId);
     const results = [];
     for (const { id } of ops) results.push({ id, ...(await undoOperation(id)) });
     const restored = results.filter((r) => r.ok).length;
@@ -134,24 +150,15 @@ function createHistory(db) {
   // ---------------------------------------------------------- dashboard
 
   function getDashboard() {
-    const totals = db
-      .prepare(
-        `SELECT (SELECT COUNT(*) FROM organization_sessions) AS sessions,
-                (SELECT COUNT(*) FROM file_operations WHERE status = 'moved')    AS moved,
-                (SELECT COUNT(*) FROM file_operations WHERE status = 'reversed') AS reversed`
-      )
-      .get();
-    const categoryTotals = db
-      .prepare(
-        `SELECT COALESCE(category, 'Others') AS category, COUNT(*) AS count, COALESCE(SUM(file_size), 0) AS bytes
-           FROM file_operations WHERE status = 'moved' GROUP BY category ORDER BY count DESC`
-      )
-      .all();
-    return { totals, categoryTotals, recentSessions: getSessions({ limit: 5 }) };
+    return {
+      totals: getDashboardTotals.get(),
+      categoryTotals: getDashboardCategories.all(),
+      recentSessions: getSessions({ limit: 5 }),
+    };
   }
 
   function isKnownPath(p) {
-    return Boolean(db.prepare('SELECT 1 FROM file_operations WHERE original_path = ? OR destination_path = ? LIMIT 1').get(p, p));
+    return Boolean(checkKnownOpPath.get(p, p) || checkKnownScanPath.get(p, p));
   }
 
   return {

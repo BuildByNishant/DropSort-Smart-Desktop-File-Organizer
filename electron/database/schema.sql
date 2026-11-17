@@ -26,7 +26,6 @@ CREATE TABLE IF NOT EXISTS file_operations (
   destination_path TEXT    NOT NULL,
   file_name        TEXT    NOT NULL,
   file_size        INTEGER,
-  sha256           TEXT,
   status           TEXT    NOT NULL CHECK (status IN ('moved', 'failed', 'skipped', 'reversed')),
   error_message    TEXT,
   category         TEXT,
@@ -39,9 +38,6 @@ CREATE TABLE IF NOT EXISTS settings (
   setting_value TEXT NOT NULL
 );
 
-CREATE INDEX IF NOT EXISTS idx_scans_created      ON scans(created_at);
 CREATE INDEX IF NOT EXISTS idx_sessions_scan      ON organization_sessions(scan_id);
-CREATE INDEX IF NOT EXISTS idx_sessions_created   ON organization_sessions(created_at);
 CREATE INDEX IF NOT EXISTS idx_ops_session        ON file_operations(session_id);
 CREATE INDEX IF NOT EXISTS idx_ops_status         ON file_operations(status);
-CREATE INDEX IF NOT EXISTS idx_ops_created        ON file_operations(created_at);

@@ -1,13 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useApp } from '../hooks/AppContext.jsx';
-import { categoryMeta } from '../utils/categories.js';
 import Button from '../components/Button.jsx';
 import Card from '../components/Card.jsx';
 import PageHeader from '../components/PageHeader.jsx';
 import { LAYOUT_OPTIONS } from '../utils/layouts.js';
-
-const clone = (o) => JSON.parse(JSON.stringify(o));
-const EXT_RE = /^[a-z0-9][a-z0-9_+-]{0,14}$/;
 
 function Row({ label, hint, children }) {
   return (
@@ -19,86 +15,12 @@ function Row({ label, hint, children }) {
 }
 const selectCls = 'rounded-lg border border-line bg-surface px-2 py-1 text-sm';
 
-function CategoryEditor({ categories, onChange, notify }) {
-  const [drafts, setDrafts] = useState({});
-  const [newName, setNewName] = useState('');
-
-  function addExt(category) {
-    const ext = (drafts[category] || '').trim().toLowerCase().replace(/^\.+/, '');
-    if (!ext) return;
-    if (!EXT_RE.test(ext)) return notify(`"${ext}" is not a valid extension. Use letters and numbers only.`);
-    const next = clone(categories);
-    const previous = Object.keys(next).find((c) => next[c].includes(ext));
-    if (previous === category) return setDrafts((d) => ({ ...d, [category]: '' }));
-    if (previous) next[previous] = next[previous].filter((e) => e !== ext);
-    next[category] = [...next[category], ext];
-    onChange(next);
-    setDrafts((d) => ({ ...d, [category]: '' }));
-    if (previous) notify(`.${ext} moved from ${previous} to ${category}.`);
-  }
-  function removeExt(category, ext) {
-    const next = clone(categories);
-    next[category] = next[category].filter((e) => e !== ext);
-    onChange(next);
-  }
-  function addCategory() {
-    const name = newName.replace(/[/\\:*?"<>|]/g, '').replace(/^\.+/, '').trim();
-    if (!name) return;
-    if (name.toLowerCase() === 'others') return notify('"Others" is built in and always exists.');
-    if (Object.keys(categories).some((c) => c.toLowerCase() === name.toLowerCase())) return notify('A category with that name already exists.');
-    onChange({ ...categories, [name]: [] });
-    setNewName('');
-  }
-  function removeCategory(category) {
-    const next = clone(categories);
-    delete next[category];
-    onChange(next);
-  }
-
-  return (
-    <div className="space-y-3">
-      {Object.entries(categories).map(([name, exts]) => {
-        const { icon, color } = categoryMeta(name);
-        return (
-          <div key={name} className="rounded-lg border border-line p-3">
-            <div className="mb-2 flex items-center justify-between">
-              <span className="text-sm font-medium">{icon} {name}</span>
-              <Button size="sm" variant="ghost" onClick={() => removeCategory(name)} aria-label={`Delete category ${name}`}>Delete</Button>
-            </div>
-            <div className="flex flex-wrap items-center gap-1.5">
-              {exts.map((e) => (
-                <span key={e} className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 font-mono text-xs" style={{ color, backgroundColor: `${color}1f` }}>
-                  .{e}
-                  <button onClick={() => removeExt(name, e)} aria-label={`Remove .${e} from ${name}`} className="opacity-60 hover:opacity-100">×</button>
-                </span>
-              ))}
-              <input
-                value={drafts[name] || ''}
-                onChange={(e) => setDrafts((d) => ({ ...d, [name]: e.target.value }))}
-                onKeyDown={(e) => e.key === 'Enter' && addExt(name)}
-                placeholder="add ext"
-                aria-label={`Add an extension to ${name}`}
-                className="w-20 rounded border border-line bg-surface px-1.5 py-0.5 font-mono text-xs"
-              />
-            </div>
-          </div>
-        );
-      })}
-      <div className="flex items-center gap-2">
-        <input value={newName} onChange={(e) => setNewName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && addCategory()} placeholder="New category name" aria-label="New category name" className="w-56 rounded-lg border border-line bg-surface px-3 py-1.5 text-sm" />
-        <Button onClick={addCategory}>Add category</Button>
-      </div>
-      <p className="text-xs text-muted">Files whose extension is not listed go to "Others". An extension can belong to only one category.</p>
-    </div>
-  );
-}
-
 export default function Settings() {
-  const { settings, defaultCategories, saveSettings, toast, setTourOpen } = useApp();
-  const [draft, setDraft] = useState(() => clone(settings));
+  const { settings, saveSettings, toast, setTourOpen, navigate } = useApp();
+  const [draft, setDraft] = useState(() => structuredClone(settings));
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => setDraft(clone(settings)), [settings]);
+  useEffect(() => setDraft(structuredClone(settings)), [settings]);
 
   const dirty = JSON.stringify(draft) !== JSON.stringify(settings);
   const set = (key, value) => setDraft((d) => ({ ...d, [key]: value }));
@@ -123,23 +45,25 @@ export default function Settings() {
         title="Settings"
         actions={
           <>
-            <Button disabled={!dirty || saving} onClick={() => setDraft(clone(settings))}>Discard</Button>
+            <Button disabled={!dirty || saving} onClick={() => setDraft(structuredClone(settings))}>Discard</Button>
             <Button variant="primary" disabled={!dirty || saving} onClick={save}>Save changes</Button>
           </>
         }
       />
 
       <Card title="Appearance and help" className="mb-4">
-        <Row label="Quick tour" hint="A 30-second walkthrough of how DropSort works.">
-          <Button onClick={() => setTourOpen(true)}>Show tour</Button>
-        </Row>
-        <Row label="Theme" hint="Follow macOS, or choose light or dark.">
-          <select className={selectCls} value={draft.theme} onChange={(e) => set('theme', e.target.value)} aria-label="Theme">
-            <option value="system">Match system</option>
-            <option value="light">Light</option>
-            <option value="dark">Dark</option>
-          </select>
-        </Row>
+        <div className="divide-y divide-line">
+          <Row label="Quick tour" hint="A 30-second walkthrough of how DropSort works.">
+            <Button onClick={() => setTourOpen(true)}>Show tour</Button>
+          </Row>
+          <Row label="Theme" hint="Follow macOS, or choose light or dark.">
+            <select className={selectCls} value={draft.theme} onChange={(e) => set('theme', e.target.value)} aria-label="Theme">
+              <option value="system">Match system</option>
+              <option value="light">Light</option>
+              <option value="dark">Dark</option>
+            </select>
+          </Row>
+        </div>
       </Card>
 
       <Card title="Scanning" className="mb-4">
@@ -176,11 +100,15 @@ export default function Settings() {
         </div>
       </Card>
 
-      <Card
-        title="Category rules"
-        action={<Button size="sm" onClick={() => set('categories', clone(defaultCategories))}>Reset to defaults</Button>}
-      >
-        <CategoryEditor categories={draft.categories} onChange={(c) => set('categories', c)} notify={(m) => toast(m)} />
+      <Card title="Sorting rules & extensions">
+        <div className="divide-y divide-line">
+          <Row label="File Categories" hint="Edit which file extensions go into each folder.">
+            <Button onClick={() => navigate('categories')}>Manage Categories</Button>
+          </Row>
+          <Row label="Smart Rules" hint="Send files matching a name, size, or age to custom folders.">
+            <Button onClick={() => navigate('rules')}>Manage Smart Rules</Button>
+          </Row>
+        </div>
       </Card>
     </div>
   );

@@ -25,6 +25,20 @@ export function categoryOrder(categories = {}, extra = []) {
   return [...Object.keys(categories), ...fromRules, 'Others'];
 }
 
+export const QUICK_FOLDERS = [
+  ['downloads', '📥', 'Downloads'],
+  ['desktop', '🖥️', 'Desktop'],
+  ['documents', '📄', 'Documents'],
+];
+
+export const EXT_RE = /^[a-z0-9][a-z0-9_+-]{0,14}$/;
+export const normalizeExt = (raw) => String(raw || '').trim().toLowerCase().replace(/^\.+/, '');
+export const sanitizeCategoryName = (name) =>
+  String(name || '').replace(/[/\\:*?"<>|\u0000-\u001f]/g, '').replace(/^\.+/, '').trim().slice(0, 60);
+
+export const isMovable = (item) => item.status === 'ready' || item.status === 'renamed';
+export const totalBytes = (files) => (files ? files.reduce((n, f) => n + f.size, 0) : 0);
+
 export const STATUS_LABELS = {
   ready: 'Ready',
   renamed: 'Will be renamed',

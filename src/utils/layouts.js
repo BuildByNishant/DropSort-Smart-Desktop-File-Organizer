@@ -5,4 +5,3 @@ export const LAYOUT_OPTIONS = [
   { id: 'year', title: 'By year', example: '2026/report.pdf', blurb: 'Only years, whatever the file type.' },
   { id: 'month', title: 'By month', example: '2026-11/report.pdf', blurb: 'Only months, whatever the file type.' },
 ];
-export const layoutTitle = (id) => LAYOUT_OPTIONS.find((o) => o.id === id)?.title || id;

@@ -41,13 +41,16 @@ export function AppProvider({ children }) {
   const [progress, setProgress] = useState({});
   const [toasts, setToasts] = useState([]);
   const toastId = useRef(0);
-
-  const navigate = useCallback((p) => setPage(p), []);
+  const toastTimers = useRef(new Set());
 
   const toast = useCallback((message, kind = 'info') => {
     const id = (toastId.current += 1);
-    setToasts((t) => [...t, { id, message, kind }]);
-    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), kind === 'error' ? 7000 : 3500);
+    setToasts((t) => [...t.slice(-3), { id, message, kind }]);
+    const timer = setTimeout(() => {
+      toastTimers.current.delete(timer);
+      setToasts((t) => t.filter((x) => x.id !== id));
+    }, kind === 'error' ? 7000 : 3500);
+    toastTimers.current.add(timer);
   }, []);
 
   // ---- startup: settings + progress events ---------------------------------
@@ -66,7 +69,13 @@ export function AppProvider({ children }) {
         setDestination((cur) => ({ ...cur, mode: s.destinationMode === 'in-place' ? 'in-place' : 'separate' }));
       })
       .catch((err) => setLoadError(err.message));
-    return api.onProgress((ev) => setProgress((p) => ({ ...p, [ev.type]: ev })));
+    const unsub = api.onProgress((ev) => setProgress((p) => ({ ...p, [ev.type]: ev })));
+    const timers = toastTimers.current;
+    return () => {
+      unsub();
+      for (const t of timers) clearTimeout(t);
+      timers.clear();
+    };
   }, []);
 
   const resetWorkflowResults = useCallback(() => {
@@ -135,18 +144,38 @@ export function AppProvider({ children }) {
     setPlan(null);
   }, []);
 
+  const runJob = useCallback(
+    async ({ key, active, setJob, onError, task, onSuccess }) => {
+      if (active) return;
+      const jobId = newJobId();
+      setJob({ jobId });
+      setProgress((p) => ({ ...p, [key]: null }));
+      try {
+        const res = await task(jobId);
+        onSuccess(res);
+      } catch (err) {
+        if (onError) onError(err.message);
+        toast(err.message, 'error');
+      } finally {
+        setJob(null);
+        setProgress((p) => ({ ...p, [key]: null }));
+      }
+    },
+    [toast]
+  );
+
   // ---- scanning --------------------------------------------------------------
   const runScan = useCallback(async () => {
-    if (!sourceFolder || scanning) return;
-    const jobId = newJobId();
-    setScanning({ jobId });
+    if (!sourceFolder) return;
     setScanError(null);
-    setProgress((p) => ({ ...p, scan: null }));
-    try {
-      const res = await api.scanFolder(sourceFolder, { ...scanOptions, jobId });
-      if (res.cancelled) {
-        toast('Scan cancelled.');
-      } else {
+    await runJob({
+      key: 'scan',
+      active: scanning,
+      setJob: setScanning,
+      onError: setScanError,
+      task: (jobId) => api.scanFolder(sourceFolder, { ...scanOptions, jobId }),
+      onSuccess: (res) => {
+        if (res.cancelled) return toast('Scan cancelled.');
         setScan(res);
         setPlan(null);
         setPlanError(null);
@@ -154,15 +183,9 @@ export function AppProvider({ children }) {
         setExcluded(new Set());
         setCategoryFilter('All');
         toast(`Scan complete: ${res.files.length.toLocaleString()} files found.`, 'success');
-      }
-    } catch (err) {
-      setScanError(err.message);
-      toast(err.message, 'error');
-    } finally {
-      setScanning(null);
-      setProgress((p) => ({ ...p, scan: null }));
-    }
-  }, [sourceFolder, scanning, scanOptions, toast]);
+      },
+    });
+  }, [sourceFolder, scanning, scanOptions, runJob, toast]);
 
   const cancelJob = useCallback((jobId) => {
     if (jobId) api.cancelJob(jobId).catch(() => {});
@@ -234,21 +257,18 @@ export function AppProvider({ children }) {
 
   // ---- duplicates ------------------------------------------------------------
   const runDuplicates = useCallback(async () => {
-    if (!scan || dupeJob) return;
-    const jobId = newJobId();
-    setDupeJob({ jobId });
-    setProgress((p) => ({ ...p, duplicates: null }));
-    try {
-      const res = await api.findDuplicates(scan.scanId, { jobId });
-      if (res.cancelled) toast('Duplicate search cancelled.');
-      else setDupes({ scanId: scan.scanId, ...res });
-    } catch (err) {
-      toast(err.message, 'error');
-    } finally {
-      setDupeJob(null);
-      setProgress((p) => ({ ...p, duplicates: null }));
-    }
-  }, [scan, dupeJob, toast]);
+    if (!scan) return;
+    await runJob({
+      key: 'duplicates',
+      active: dupeJob,
+      setJob: setDupeJob,
+      task: (jobId) => api.findDuplicates(scan.scanId, { jobId }),
+      onSuccess: (res) => {
+        if (res.cancelled) toast('Duplicate search cancelled.');
+        else setDupes({ scanId: scan.scanId, ...res });
+      },
+    });
+  }, [scan, dupeJob, runJob, toast]);
 
   // ---- settings --------------------------------------------------------------
   const saveSettings = useCallback(
@@ -297,30 +317,19 @@ export function AppProvider({ children }) {
     }
   }, [settings, saveSettings]);
 
+  const runAction = useCallback((fn) => fn().catch((err) => toast(err.message, 'error')), [toast]);
+
   const exportCsv = useCallback(
-    async (kind, id, options) => {
-      try {
-        const res = await api.exportCsv(kind, id, options);
-        if (res) toast('Spreadsheet saved.', 'success');
-      } catch (err) {
-        toast(err.message, 'error');
-      }
-    },
-    [toast]
+    (kind, id, options) => runAction(async () => {
+      if (await api.exportCsv(kind, id, options)) toast('Spreadsheet saved.', 'success');
+    }),
+    [runAction, toast]
   );
-
-  const openPrivacy = useCallback(
-    (pane) => api.openPrivacySettings(pane).catch((err) => toast(err.message, 'error')),
-    [toast]
-  );
-
-  const reveal = useCallback(
-    (p) => api.revealInFinder(p).catch((err) => toast(err.message, 'error')),
-    [toast]
-  );
+  const openPrivacy = useCallback((pane) => runAction(() => api.openPrivacySettings(pane)), [runAction]);
+  const reveal = useCallback((p) => runAction(() => api.revealInFinder(p)), [runAction]);
 
   const value = {
-    page, navigate, settings, defaultCategories, loadError, saveSettings,
+    page, navigate: setPage, settings, defaultCategories, loadError, saveSettings,
     sourceFolder, scanOptions, setScanOptions, destination, setDestinationMode, conflictPolicy, setConflictPolicy,
     layout, setLayout, pickSource, dropFolder, pickDestination, addPreset, tourOpen, setTourOpen, finishTour, exportCsv,
     scan, scanning, scanError, runScan, cancelJob,

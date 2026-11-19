@@ -14,6 +14,7 @@ export function computeInsights(files, { now = Date.now(), existingPresets = new
   let screenshots = 0;
   let invoices = 0;
   let installers = 0;
+  const largest = [];
 
   for (const f of files) {
     totalSize += f.size;
@@ -25,6 +26,13 @@ export function computeInsights(files, { now = Date.now(), existingPresets = new
     if (SCREENSHOT_RE.test(f.name)) screenshots += 1;
     if (INVOICE_RE.test(f.name)) invoices += 1;
     if (f.ext === 'dmg' || f.ext === 'pkg') installers += 1;
+
+    // Keep top 5 largest files in a single O(N) pass.
+    if (largest.length < 5 || f.size > largest[largest.length - 1].size) {
+      largest.push(f);
+      largest.sort((a, b) => b.size - a.size);
+      if (largest.length > 5) largest.pop();
+    }
   }
 
   const othersCount = byCategory.Others ? byCategory.Others.count : 0;
@@ -33,8 +41,6 @@ export function computeInsights(files, { now = Date.now(), existingPresets = new
   const oldPart = total ? Math.round((25 * oldCount) / total) : 0;
   const score = Math.max(0, Math.min(100, countPart + othersPart + oldPart));
   const level = score < 25 ? 'Tidy' : score < 55 ? 'Getting messy' : 'Cluttered';
-
-  const largest = [...files].sort((a, b) => b.size - a.size).slice(0, 5);
 
   const tips = [];
   const add = (presetId, text) => {

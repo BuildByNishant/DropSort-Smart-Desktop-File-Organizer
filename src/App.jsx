@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useApp } from './hooks/AppContext.jsx';
-import { hasApi } from './utils/api.js';
+import { api } from './utils/api.js';
 import Sidebar from './components/Sidebar.jsx';
 import Toasts from './components/Toasts.jsx';
 import Onboarding from './components/Onboarding.jsx';
@@ -84,22 +84,16 @@ export default function App() {
     };
   }, [dropFolder]);
 
-  if (!hasApi) {
+  if (!api || loadError) {
     return (
       <div className="flex h-full items-center justify-center p-10 text-center">
         <div>
-          <h1 className="text-xl font-semibold">DropSort needs to run inside its desktop window</h1>
-          <p className="mt-2 text-sm text-muted">Start it with <code>npm run dev</code> instead of opening this page in a browser.</p>
-        </div>
-      </div>
-    );
-  }
-  if (loadError) {
-    return (
-      <div className="flex h-full items-center justify-center p-10 text-center">
-        <div>
-          <h1 className="text-xl font-semibold">DropSort could not load its settings</h1>
-          <p className="mt-2 text-sm text-muted">{loadError}</p>
+          <h1 className="text-xl font-semibold">
+            {api ? 'DropSort could not load its settings' : 'DropSort needs to run inside its desktop window'}
+          </h1>
+          <p className="mt-2 text-sm text-muted">
+            {api ? loadError : <>Start it with <code>npm run dev</code> instead of opening this page in a browser.</>}
+          </p>
         </div>
       </div>
     );

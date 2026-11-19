@@ -4,7 +4,7 @@ const path = require('path');
 
 const { UserError, friendlyError } = require('../services/errors');
 const { scanFolder } = require('../services/scanner');
-const { buildExtensionMap, classifyFile, DEFAULT_CATEGORIES, LAYOUTS } = require('../services/categorizer');
+const { buildExtensionMap, classifyFile, compileRules, DEFAULT_CATEGORIES, LAYOUTS } = require('../services/categorizer');
 const { planToCsv, historyToCsv } = require('../services/exporter');
 const { buildPlan, executePlan, isMovable, sessionStatus } = require('../services/organizer');
 const { findDuplicates } = require('../services/duplicateDetector');
@@ -41,6 +41,9 @@ function jobId(value) {
 }
 function clampInt(value, dflt, min, max) {
   return Number.isInteger(value) ? Math.min(max, Math.max(min, value)) : dflt;
+}
+function searchText(value) {
+  return typeof value === 'string' ? value.slice(0, 200) : '';
 }
 
 async function assertWritableDirectory(dir) {
@@ -178,9 +181,10 @@ function registerIpcHandlers({ electron, db }) {
       if (result.cancelled) return { cancelled: true };
 
       const extensionMap = buildExtensionMap(settings.categories);
+      const compiledRules = compileRules(settings.rules);
       const now = Date.now();
       const files = result.files.map((f) => {
-        const { category, ruleId } = classifyFile(f, { extensionMap, rules: settings.rules, now });
+        const { category, ruleId } = classifyFile(f, { extensionMap, compiledRules, now });
         return { ...f, category, ruleId };
       });
       const scanId = crypto.randomUUID();
@@ -213,10 +217,11 @@ function registerIpcHandlers({ electron, db }) {
     const scan = getScan(scanId);
     const settings = getSettings(db);
     const extensionMap = buildExtensionMap(settings.categories);
+    const compiledRules = compileRules(settings.rules);
     const now = Date.now();
     const categories = {};
     for (const file of scan.files) {
-      const { category, ruleId } = classifyFile(file, { extensionMap, rules: settings.rules, now });
+      const { category, ruleId } = classifyFile(file, { extensionMap, compiledRules, now });
       file.category = category;
       file.ruleId = ruleId;
       categories[file.id] = { category, ruleId };
@@ -349,7 +354,7 @@ function registerIpcHandlers({ electron, db }) {
   handle('history:sessions', (_e, filters) => {
     const f = obj(filters);
     return history.getSessions({
-      search: typeof f.search === 'string' ? f.search.slice(0, 200) : '',
+      search: searchText(f.search),
       limit: clampInt(f.limit, 50, 1, 200),
       offset: clampInt(f.offset, 0, 0, 1e9),
     });
@@ -358,7 +363,7 @@ function registerIpcHandlers({ electron, db }) {
     const f = obj(filters);
     return history.getOperations(posInt(sessionId, 'session'), {
       status: ['moved', 'failed', 'skipped', 'reversed'].includes(f.status) ? f.status : '',
-      search: typeof f.search === 'string' ? f.search.slice(0, 200) : '',
+      search: searchText(f.search),
       limit: clampInt(f.limit, 200, 1, 500),
       offset: clampInt(f.offset, 0, 0, 1e9),
     });
@@ -383,9 +388,17 @@ function registerIpcHandlers({ electron, db }) {
       csv = planToCsv(plan.items.filter((i) => !excluded.has(i.id)));
       defaultName = 'DropSort preview.csv';
     } else {
-      const { operations } = history.getOperations(posInt(id, 'session'), { limit: 500 });
-      csv = historyToCsv(operations);
-      defaultName = `DropSort history ${id}.csv`;
+      const sid = posInt(id, 'session');
+      const allOps = [];
+      let offset = 0;
+      while (true) {
+        const { operations, total } = history.getOperations(sid, { limit: 500, offset });
+        allOps.push(...operations);
+        if (allOps.length >= total || operations.length === 0) break;
+        offset += operations.length;
+      }
+      csv = historyToCsv(allOps);
+      defaultName = `DropSort history ${sid}.csv`;
     }
     const win = BrowserWindow.fromWebContents(event.sender);
     const result = await dialog.showSaveDialog(win, {

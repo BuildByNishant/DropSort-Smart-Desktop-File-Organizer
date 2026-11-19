@@ -23,7 +23,6 @@ contextBridge.exposeInMainWorld('dropsort', {
     return call('dialog:approveDropped', droppedPath);
   },
   scanFolder: (folderPath, options) => call('scan:start', folderPath, options),
-  cancelScan: (jobId) => call('job:cancel', jobId),
   cancelJob: (jobId) => call('job:cancel', jobId),
   recategorizeScan: (scanId) => call('scan:recategorize', scanId),
 

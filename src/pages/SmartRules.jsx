@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useApp } from '../hooks/AppContext.jsx';
-import { FIELDS, RULE_PRESETS, describeRule, newRuleId, ruleFromPreset } from '../utils/rulePresets.js';
+import { FIELDS, RULE_PRESETS, describeRule, newRuleId } from '../utils/rulePresets.js';
 import Button from '../components/Button.jsx';
 import Card from '../components/Card.jsx';
 import PageHeader from '../components/PageHeader.jsx';
@@ -17,7 +17,9 @@ function RuleForm({ initial, onSave, onCancel, submitLabel }) {
     const f = FIELDS.find((x) => x.id === id);
     setRule((r) => ({ ...r, field: id, op: f.ops[0][0], value: '' }));
   }
-  const ready = rule.name.trim() && String(rule.value).trim() && rule.folder.trim();
+  const valueNum = Number(rule.value);
+  const invalidNum = numeric && String(rule.value).trim() !== '' && (!Number.isFinite(valueNum) || valueNum <= 0);
+  const ready = Boolean(rule.name.trim() && String(rule.value).trim() && rule.folder.trim() && !invalidNum);
 
   return (
     <div className="space-y-3 rounded-xl border border-line bg-surface2 p-4">
@@ -44,9 +46,12 @@ function RuleForm({ initial, onSave, onCancel, submitLabel }) {
           <input className={`${inputCls} mt-1 w-full`} type={numeric ? 'number' : 'text'} min={numeric ? 1 : undefined} value={rule.value} onChange={(e) => setRule({ ...rule, value: e.target.value })} />
         </label>
       </div>
-      <div className="flex justify-end gap-2">
-        {onCancel && <Button onClick={onCancel}>Cancel</Button>}
-        <Button variant="primary" disabled={!ready} onClick={() => onSave({ ...rule, name: rule.name.trim(), folder: rule.folder.trim() })}>{submitLabel}</Button>
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-xs text-bad">{invalidNum ? 'Enter a number greater than 0.' : ''}</span>
+        <div className="flex gap-2">
+          {onCancel && <Button onClick={onCancel}>Cancel</Button>}
+          <Button variant="primary" disabled={!ready} onClick={() => onSave({ ...rule, name: rule.name.trim(), folder: rule.folder.trim() })}>{submitLabel}</Button>
+        </div>
       </div>
     </div>
   );

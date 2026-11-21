@@ -8,8 +8,7 @@ import ProgressBar from '../components/ProgressBar.jsx';
 import Stepper from '../components/Stepper.jsx';
 import PermissionHelp, { isPermissionError } from '../components/PermissionHelp.jsx';
 import { formatBytes, plural } from '../utils/format.js';
-
-const QUICK = [['downloads', '📥', 'Downloads'], ['desktop', '🖥️', 'Desktop'], ['documents', '📄', 'Documents']];
+import { QUICK_FOLDERS, totalBytes } from '../utils/categories.js';
 
 function Toggle({ checked, onChange, label, hint, disabled }) {
   return (
@@ -30,7 +29,7 @@ export default function Organizer() {
   } = useApp();
 
   const sp = progress.scan;
-  const scanSize = scan ? scan.files.reduce((n, f) => n + f.size, 0) : 0;
+  const scanSize = totalBytes(scan?.files);
   const needsDest = destination.mode === 'separate' && !destination.path;
 
   return (
@@ -50,7 +49,7 @@ export default function Organizer() {
             <div className="text-3xl" aria-hidden="true">📂</div>
             <p className="mt-2 text-sm font-medium">Drag a folder here, or pick one</p>
             <div className="mt-3 flex flex-wrap justify-center gap-2">
-              {QUICK.map(([id, icon, label]) => <Button key={id} onClick={() => pickSource(id)}>{icon} {label}</Button>)}
+              {QUICK_FOLDERS.map(([id, icon, label]) => <Button key={id} onClick={() => pickSource(id)}>{icon} {label}</Button>)}
               <Button variant="primary" onClick={() => pickSource()}>Choose folder...</Button>
             </div>
           </div>

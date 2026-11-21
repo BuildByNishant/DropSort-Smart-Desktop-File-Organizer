@@ -2,16 +2,10 @@ import { useEffect, useState } from 'react';
 import { useApp } from '../hooks/AppContext.jsx';
 import { api } from '../utils/api.js';
 import { formatBytes, formatDate, plural, folderName } from '../utils/format.js';
-import { categoryMeta } from '../utils/categories.js';
+import { categoryMeta, QUICK_FOLDERS, totalBytes } from '../utils/categories.js';
 import Button from '../components/Button.jsx';
 import Card, { StatCard } from '../components/Card.jsx';
 import { Badge, statusTone } from '../components/Badge.jsx';
-
-const QUICK = [
-  ['downloads', '📥', 'Downloads'],
-  ['desktop', '🖥️', 'Desktop'],
-  ['documents', '📄', 'Documents'],
-];
 
 const WHY = [
   ['👁️', 'Preview first', 'See every move before it happens.'],
@@ -37,7 +31,7 @@ export default function Dashboard() {
     if (picked) navigate('organizer');
   }
 
-  const scanSize = scan ? scan.files.reduce((n, f) => n + f.size, 0) : 0;
+  const scanSize = totalBytes(scan?.files);
   const maxCount = data?.categoryTotals?.[0]?.count || 1;
   const activeRules = settings.rules.filter((r) => r.enabled).length;
 
@@ -47,7 +41,7 @@ export default function Dashboard() {
         <h2 className="text-3xl font-semibold tracking-tight">Tidy any folder in under a minute</h2>
         <p className="mt-2 max-w-xl text-white/85">Pick a folder, check the preview, and DropSort sorts everything into neat folders. Nothing is deleted or overwritten, and you can undo it all.</p>
         <div className="mt-6 flex flex-wrap items-center gap-2.5">
-          {QUICK.map(([id, icon, label]) => (
+          {QUICK_FOLDERS.map(([id, icon, label]) => (
             <button key={id} onClick={() => start(id)} className="no-drag inline-flex items-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-semibold text-slate-900 shadow transition hover:scale-[1.02]">
               <span aria-hidden="true">{icon}</span>{label}
             </button>

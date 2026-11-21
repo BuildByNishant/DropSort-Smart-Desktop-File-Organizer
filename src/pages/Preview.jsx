@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import { useApp } from '../hooks/AppContext.jsx';
 import { formatBytes, plural } from '../utils/format.js';
-import { categoryOrder, STATUS_LABELS } from '../utils/categories.js';
+import { categoryOrder, isMovable, STATUS_LABELS } from '../utils/categories.js';
 import Button from '../components/Button.jsx';
 import Card, { StatCard } from '../components/Card.jsx';
 import ConfirmDialog from '../components/ConfirmDialog.jsx';
@@ -16,7 +16,6 @@ import { LAYOUT_OPTIONS } from '../utils/layouts.js';
 import { Badge, CategoryBadge, statusTone } from '../components/Badge.jsx';
 
 const PAGE_SIZE = 100;
-const isMovable = (item) => item.status === 'ready' || item.status === 'renamed';
 
 export default function Preview() {
   const {
@@ -30,6 +29,10 @@ export default function Preview() {
   useEffect(() => {
     loadPreview();
   }, [loadPreview]);
+
+  useEffect(() => {
+    setPage(0);
+  }, [plan?.planId]);
 
   const items = useMemo(() => {
     if (!plan) return [];
@@ -49,6 +52,10 @@ export default function Preview() {
   const needsDestination = destination.mode === 'separate' && !destination.path;
   const includedMovable = plan ? plan.items.filter((i) => isMovable(i) && !excluded.has(i.id)) : [];
   const includedBytes = includedMovable.reduce((n, i) => n + i.size, 0);
+  const newFolderSet = plan ? new Set(plan.summary.newFolders) : null;
+  const activeNewFolders = newFolderSet
+    ? new Set(includedMovable.map((i) => i.destinationDir).filter((d) => newFolderSet.has(d))).size
+    : 0;
   const pageItems = items.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
   const movableIds = items.filter(isMovable).map((i) => i.id);
   const allMovableChecked = movableIds.length > 0 && movableIds.every((id) => !excluded.has(id));
@@ -133,7 +140,7 @@ export default function Preview() {
 
           <div className="mb-4 grid grid-cols-4 gap-3">
             <StatCard label="Planned moves" value={includedMovable.length.toLocaleString()} hint={formatBytes(includedBytes)} />
-            <StatCard label="New folders" value={plan.summary.newFolders.length} hint="Created only after you confirm" />
+            <StatCard label="New folders" value={activeNewFolders} hint="Created only after you confirm" />
             <StatCard label="Renamed on conflict" value={plan.items.filter((i) => i.status === 'renamed' && !excluded.has(i.id)).length} />
             <StatCard label="Not moved" value={plan.items.filter((i) => !isMovable(i) || excluded.has(i.id)).length} hint="Skipped or unticked" />
           </div>

@@ -21,7 +21,10 @@ export default function ScanResults() {
   const [page, setPage] = useState(0);
   const [selectedId, setSelectedId] = useState(null);
 
-  useEffect(() => setPage(0), [search, sort, categoryFilter]);
+  useEffect(() => setPage(0), [search, sort, categoryFilter, scan?.scanId]);
+  useEffect(() => setSelectedId(null), [scan?.scanId]);
+
+  const ruleNames = useMemo(() => Object.fromEntries((settings.rules || []).map((r) => [r.id, r.name])), [settings.rules]);
 
   const counts = useMemo(() => {
     const c = {};
@@ -65,8 +68,6 @@ export default function ScanResults() {
   }
   const arrow = (key) => (sort.key === key ? (sort.dir === 'asc' ? ' ▲' : ' ▼') : '');
   const ariaSort = (key) => (sort.key === key ? (sort.dir === 'asc' ? 'ascending' : 'descending') : 'none');
-
-  const ruleNames = Object.fromEntries((settings.rules || []).map((r) => [r.id, r.name]));
 
   return (
     <div className="mx-auto max-w-6xl">

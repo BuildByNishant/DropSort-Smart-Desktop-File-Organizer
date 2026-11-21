@@ -21,6 +21,8 @@ export default function History() {
   const [search, setSearch] = useState('');
   const [busyOp, setBusyOp] = useState(null);
   const [confirmSession, setConfirmSession] = useState(false);
+  const [undoingSession, setUndoingSession] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState(null);
 
   const loadSessions = useCallback(async () => {
@@ -43,11 +45,22 @@ export default function History() {
   }, [selectedId, status, search]);
 
   useEffect(() => { loadSessions(); }, [loadSessions, lastResult]);
-  useEffect(() => { loadOps(); }, [loadOps]);
+  useEffect(() => {
+    setOps({ operations: [], total: 0 });
+    loadOps();
+  }, [loadOps]);
 
   async function loadMore() {
-    const more = await api.getOperations(selectedId, { status, search, limit: 200, offset: ops.operations.length });
-    setOps((cur) => ({ ...more, operations: [...cur.operations, ...more.operations] }));
+    if (loadingMore) return;
+    setLoadingMore(true);
+    try {
+      const more = await api.getOperations(selectedId, { status, search, limit: 200, offset: ops.operations.length });
+      setOps((cur) => ({ ...more, operations: [...cur.operations, ...more.operations] }));
+    } catch (err) {
+      toast(err.message, 'error');
+    } finally {
+      setLoadingMore(false);
+    }
   }
 
   async function undoOne(op) {
@@ -64,13 +77,16 @@ export default function History() {
   }
 
   async function undoAll() {
-    setConfirmSession(false);
+    setUndoingSession(true);
     try {
       const res = await api.undoSession(selectedId);
       toast(res.blocked ? `Restored ${res.restored} of ${res.total}. ${res.blocked} blocked.` : `Restored ${plural(res.restored, 'file')}.`, res.blocked ? 'error' : 'success');
       await Promise.all([loadOps(), loadSessions()]);
     } catch (err) {
       toast(err.message, 'error');
+    } finally {
+      setUndoingSession(false);
+      setConfirmSession(false);
     }
   }
 
@@ -161,13 +177,17 @@ export default function History() {
               </ul>
             )}
             {ops.operations.length < ops.total && (
-              <div className="border-t border-line p-2 text-center"><Button size="sm" onClick={loadMore}>Load more ({ops.total - ops.operations.length} left)</Button></div>
+              <div className="border-t border-line p-2 text-center">
+                <Button size="sm" disabled={loadingMore} onClick={loadMore}>
+                  {loadingMore ? 'Loading...' : `Load more (${ops.total - ops.operations.length} left)`}
+                </Button>
+              </div>
             )}
           </Card>
         </div>
       </div>
 
-      <ConfirmDialog open={confirmSession} title="Undo this session?" confirmLabel="Undo" onConfirm={undoAll} onCancel={() => setConfirmSession(false)}>
+      <ConfirmDialog open={confirmSession} title="Undo this session?" confirmLabel="Undo" busy={undoingSession} onConfirm={undoAll} onCancel={() => setConfirmSession(false)}>
         <p>Every file from this session that is still in its new location will be moved back. Nothing is overwritten; blocked files stay where they are.</p>
       </ConfirmDialog>
     </div>

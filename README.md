@@ -2,7 +2,7 @@
 
 <p align="center">
   <strong>Smart, offline desktop file organizer for macOS.</strong><br>
-  Organize cluttered Downloads, Desktop, and project directories with zero risk of data loss.
+  Organize cluttered Downloads, Desktop, and project folders with zero risk of data loss.
 </p>
 
 <p align="center">
@@ -17,149 +17,193 @@
 
 ---
 
-## 💡 Why DropSort?
+## Why DropSort?
 
-Most desktop file organizers operate like a black box: they move or delete files automatically, occasionally breaking paths or losing important work. 
+Most file organizers move or delete files blindly. **DropSort is built around "Safety First"**:
 
-**DropSort is built on a "Safety First" philosophy**:
-- **Always Preview First**: See the exact destination path of every file before any operation begins.
-- **Never Overwrite or Delete**: Conflicts are safely renamed (`file (1).pdf`) or skipped. Originals remain intact.
-- **Full Undo History**: Every move is recorded in a local SQLite database. Revert a single file or an entire organization session with one click.
-- **100% Private & Offline**: Works entirely on your local machine with zero external network requests.
+- **Preview Before Moving**: Inspect the exact destination path, folder layout, and conflict resolution for every file before anything changes on disk.
+- **Zero Overwrites or Deletions**: Existing files are safely renamed (`file (1).pdf`) or skipped. Same-disk moves use atomic hard-link + unlink; cross-disk moves copy to a temp file, verify size & SHA-256 checksum, publish without overwriting, and only then remove the source.
+- **Full Undo History**: Every session and file move is logged in a local SQLite database (`~/Library/Application Support/DropSort/dropsort.db`). Restore a single file or an entire session at any time—never overwriting if the original path is now occupied.
+- **100% Local & Offline**: Runs completely on your Mac with no telemetry or network calls.
 
 ---
 
-## 📥 Download & Installation
+## Key Features
 
-DropSort is available as a standalone desktop installer for macOS (Apple Silicon M1/M2/M3/M4):
+| Feature | Description |
+|---|---|
+| **Smart Rules Engine** | Match files by name (`contains`, `starts with`, `ends with`), extension, size (MB), or age (days) to route them before default category sorting. |
+| **Flexible Sorting Layouts** | Arrange files `By type`, `By type, then month`, `By type, then year`, `By year`, or `By month`. |
+| **Editable Categories** | Customize extension-to-folder mappings directly on the **Categories** page with instant scan recategorization. |
+| **Exact Duplicate Finder** | Groups files by size first, then compares streaming SHA-256 hashes—never deleting anything automatically. |
+| **Folder Clutter Insights** | Displays a clutter score, storage breakdown by category, top 5 largest files, and one-click rule suggestions. |
+| **Session History & Undo** | Filterable audit log per session with single-file undo, full-session undo, and **Show in Finder**. |
+| **Sanitized CSV Export** | Export preview plans or full history sessions to spreadsheet-safe CSV files (with formula-injection neutralization). |
 
-### [⬇️ Download DropSort-1.0.0-arm64.dmg](../../releases/latest)
+---
 
-### Quick Setup:
-1. Download **`DropSort-1.0.0-arm64.dmg`** from the [Releases](../../releases/latest) section.
-2. Open the `.dmg` file and drag **DropSort** into your **Applications** folder.
-3. Open DropSort from Applications or Spotlight (`⌘ Space`).
+## Install from `.dmg` (End Users)
 
-> **Note for macOS:**  
-> Because this is a free open-source build without a paid Apple Developer certificate, macOS Gatekeeper may prompt you on first launch:
-> - **Option 1**: Right-click `DropSort.app` in Applications and choose **Open**.
-> - **Option 2**: In Terminal, run:
+1. Download **`DropSort-1.0.0-arm64.dmg`** from [Releases](../../releases/latest).
+2. Double-click the `.dmg` file and drag **DropSort** into **Applications**.
+3. Launch DropSort from **Applications** or Spotlight (`⌘ Space`).
+
+> **Unsigned macOS Build (Gatekeeper):**  
+> Because this open-source build is not notarized with an Apple Developer ID, macOS may block the first launch:
+> - **Option A (Finder)**: Right-click `/Applications/DropSort.app` -> **Open** -> **Open**.
+> - **Option B (Terminal)**: Clear the quarantine attribute:
 >   ```bash
 >   xattr -cr /Applications/DropSort.app
 >   ```
 
 ---
 
-## ⚡ Key Features
+## Step-by-Step User Guide
 
-| Feature | Description |
-|---|---|
-| **Smart Rules Engine** | Define custom rules (by filename pattern, extension, file size, or age) to direct files into designated folders before generic categorization. |
-| **Flexible Sorting Layouts** | Organize by category (Documents, Images, Archives, Code, etc.), by category + date (`Documents/2026-11/`), or date-only folders. |
-| **Exact Duplicate Finder** | Identifies identical files using quick size matching followed by byte-for-byte SHA-256 checksums. Review duplicates without risking accidental deletion. |
-| **Folder Clutter Analytics** | Instantly visualize folder clutter scores, category breakdowns, and top space hogs. |
-| **Session History & Instant Undo** | Complete transactional log of every session. Roll back moves safely whenever you need. |
-| **Export to Spreadsheet** | Export file manifests, scan results, and history logs to sanitized CSV files. |
-| **Native macOS Integration** | Drag-and-drop folders directly onto the window, use native file pickers, and enjoy macOS keyboard shortcuts (`⌘O`, `⌘,`). |
+### Main Organize Workflow
+1. **Pick a Source Folder**: From **Dashboard** or **Organizer**, click **Downloads**, **Desktop**, **Documents**, **Choose folder...** (`⌘O`), or drag-and-drop any folder onto the window.
+2. **Choose Destination & Sorting Style**:
+   - Select **A separate folder** (recommended) or **Right inside the same folder** (in-place).
+   - Pick a sorting style (`By type`, `By type, then month`, etc.) and toggle **Include files inside subfolders** or **Include hidden files** if needed.
+3. **Scan & Inspect**: Click **Scan folder**. Review the clutter score, category breakdown, and file table on **Scan Results**, search/filter files, and untick any files you want to leave untouched.
+4. **Preview the Plan**: Open **Preview** to verify every source -> destination path, conflict renames/skips, and new folders. Optionally click **Export CSV** to save the plan.
+5. **Organize & Undo Anytime**: Click **Organize**, confirm the dialog, and watch real-time progress. After completion, inspect **Summary** or visit **History** later to reveal folders in Finder or undo individual files / entire sessions.
 
----
-
-## 🔄 How It Works
-
-```
- ┌──────────────┐     ┌──────────────┐     ┌──────────────┐     ┌──────────────┐
- │ 1. Choose    │ ──> │ 2. Scan &    │ ──> │ 3. Preview   │ ──> │ 4. Organize  │
- │    Folder    │     │    Inspect   │     │    Plan      │     │    & Undo    │
- └──────────────┘     └──────────────┘     └──────────────┘     └──────────────┘
-```
-
-1. **Select Folder**: Pick any folder (Downloads, Desktop, or external drives) or drag it into the app.
-2. **Scan & Inspect**: Filter files by category, search names, toggle inclusions, and view clutter recommendations.
-3. **Review Preview**: Inspect the proposed folder layout, conflicts, and renames before anything moves.
-4. **Organize**: Watch real-time progress. Any operation can be immediately undone from the History page.
+### Customizing Sorting & Checking Duplicates
+- **Smart Rules**: Open **Smart Rules** to enable one-click presets (Screenshots, Invoices, Installers, Large files, Old files) or create prioritized custom rules. Rules run top-to-bottom before extension categories.
+- **Categories**: Open **Categories** to add/remove file extensions or create new category folders; changes save immediately and update your current scan.
+- **Duplicates**: Open **Duplicates** after any scan and click **Find Duplicates** to locate byte-identical copies and reveal them in Finder.
+- **macOS Folder Permissions**: If macOS denies access (`Permission denied`), use the inline **Open Files and Folders** or **Open Full Disk Access** buttons shown by DropSort, grant permission, and click **Scan** again.
 
 ---
 
-## 🛡️ Architecture & Security
-
-DropSort adheres to strict desktop security and data integrity standards:
-
-- **Isolated Renderer**: The UI runs with `contextIsolation: true`, `sandbox: true`, `nodeIntegration: false`, and a strict Content Security Policy (CSP).
-- **Hardened IPC Bridge**: The preload layer exposes only validated, explicit method handlers. Arbitrary file path execution from the renderer is prohibited.
-- **Non-Destructive Move Strategy**: On the same disk, file relocations use atomic linking/non-overwrite semantics (`EEXIST` checks). Cross-disk operations employ verified copy-and-checksum before source cleanup.
-- **Embedded SQLite Storage**: Sessions and audit logs are safely stored locally in `~/Library/Application Support/DropSort/dropsort.db`.
-
----
-
-## 🛠️ Tech Stack
-
-- **Runtime**: [Electron](https://www.electronjs.org/)
-- **Frontend**: [React 19](https://react.dev/), [Vite](https://vitejs.dev/), [Tailwind CSS v4](https://tailwindcss.com/)
-- **Database**: [better-sqlite3](https://github.com/WiseLibs/better-sqlite3)
-- **Packaging**: [electron-builder](https://www.electron.build/)
-- **Testing**: Node.js built-in test runner (`node:test`)
-
----
-
-## 💻 Developer Guide
+## Developer Step-by-Step Guide
 
 ### Prerequisites
 - macOS 12 Monterey or later
 - Node.js LTS (v20+ recommended)
-- Xcode Command Line Tools (`xcode-select --install`)
+- Xcode Command Line Tools:
+  ```bash
+  xcode-select --install
+  ```
 
-### Local Setup
-
+### Step 1: Clone & Install Dependencies
 ```bash
-# Clone the repository
 git clone https://github.com/BuiltByNishant/DropSort-Smart-Desktop-File-Organizer.git
 cd DropSort-Smart-Desktop-File-Organizer
-
-# Install dependencies
 npm install
-
-# Start Vite + Electron in development mode
-npm run dev
 ```
 
-### Testing & Verification
+### Step 2: Run in Development or Production Mode
+```bash
+# Start Vite dev server + Electron with live reload
+npm run dev
+
+# Or build the Vite bundle and launch Electron directly
+npm start
+```
+
+### Step 3: Run Tests & Verification
+> **Note on `better-sqlite3` native bindings:**  
+> `npm install` builds `better-sqlite3` for your local Node version, whereas `npm run rebuild` (`electron-builder install-app-deps`) compiles it for Electron's ABI.
+> - When compiled for **Node**, `npm test` runs **all 51 tests** (unit + SQLite + IPC integration).
+> - When compiled for **Electron**, `npm test` runs the 37 pure-JS tests and automatically skips the 14 SQLite-backed tests until rebuilt for Node (`npm rebuild better-sqlite3`).
 
 ```bash
-# Run unit & integration test suites (50+ tests covering scanner, rules, safety moves, undo)
+# 1. Run unit & integration test suite (51 tests total)
 npm test
 
-# Run UI smoke test
+# 2. Run SSR smoke test across all 10 React pages & variants
 npm run test:ui
 
-# Build production bundle
+# 3. Build production frontend bundle into dist/
 npm run build
+```
 
-# Package local macOS installer (.dmg)
+---
+
+## Packaging & `.dmg` Commands
+
+Make sure native dependencies match Electron before packaging:
+
+```bash
+# Rebuild native modules (better-sqlite3) for Electron
+npm run rebuild
+```
+
+### Build `.dmg` Installer
+```bash
+# Build frontend (dist/) + package macOS .dmg installer into release/
 npm run dist:mac
 ```
+Output: `release/DropSort-1.0.0-arm64.dmg` (or `-x64.dmg` on Intel Macs).
+
+### Additional `.dmg` & Build Commands
+```bash
+# Build an unsigned .dmg (skips Apple Developer certificate lookup in Keychain)
+CSC_IDENTITY_AUTO_DISCOVERY=false npm run dist:mac
+
+# Build for a specific Mac architecture or Universal binary (Apple Silicon + Intel)
+npm run build && npx electron-builder --mac dmg --arm64
+npm run build && npx electron-builder --mac dmg --x64
+npm run build && npx electron-builder --mac dmg --universal
+
+# Build an unpacked .app bundle in release/mac-arm64/ (faster for local testing)
+npm run dist:dir
+
+# Open / mount the generated .dmg in Finder
+open release/DropSort-*.dmg
+
+# Strip quarantine flag if testing the packaged .app locally
+xattr -cr release/mac*/DropSort.app
+```
 
 ---
 
-## 📁 Repository Structure
+## Architecture & Security
 
-```
+- **Isolated Renderer**: `contextIsolation: true`, `sandbox: true`, `nodeIntegration: false`, and strict CSP in [index.html](index.html).
+- **Hardened IPC Bridge**: [electron/preload.js](electron/preload.js) exposes only explicit channel wrappers; [electron/ipc/handlers.js](electron/ipc/handlers.js) validates every argument and restricts scanning/revealing to user-approved or recorded paths.
+- **Embedded SQLite Storage**: Local schema in [electron/database/schema.sql](electron/database/schema.sql) opened in WAL mode with foreign keys enabled.
+
+---
+
+## Repository Structure
+
+```text
 electron/
-  main.js                 # App lifecycle and window creation
-  preload.js              # Secure IPC bridge
-  ipc/handlers.js         # Validated IPC channels
-  services/               # Scanner, organizer, categorizer, duplicates, history
-  database/               # SQLite database connection and SQL schema
+  main.js                    # Electron lifecycle, single-instance lock, BrowserWindow
+  preload.js                 # Context-isolated window.dropsort IPC bridge
+  ipc/handlers.js            # Validated IPC channels & job cancellation
+  database/
+    db.js                    # SQLite connection & WAL setup
+    schema.sql               # scans, organization_sessions, file_operations, settings
+  services/
+    scanner.js               # Cancellable folder scanner (skips symlinks & partial downloads)
+    categorizer.js           # Extension categories, compiled Smart Rules, layout segments
+    organizer.js             # Dry-run planner & non-overwrite move/copy-verify engine
+    duplicateDetector.js     # Size-grouped streaming SHA-256 duplicate finder
+    history.js               # Session/operation logging, dashboard stats, safe undo
+    settings.js              # Schema-validated settings persistence
+    exporter.js              # Formula-safe CSV export
+    hash.js                  # Streaming SHA-256 helper
+    errors.js                # UserError & macOS-friendly errno mapping
 src/
-  App.jsx                 # Main application layout and navigation
-  pages/                  # Dashboard, Organizer, Preview, Smart Rules, History, Settings
-  components/             # Reusable UI widgets (cards, steppers, modals, insights)
-  hooks/AppContext.jsx    # Application context state
-tests/                    # Comprehensive unit and integration test suites
-build/icon.png            # Application icon asset
+  App.jsx                    # Shell, keyboard shortcuts (⌘O, ⌘,), drag-and-drop overlay
+  hooks/AppContext.jsx       # Shared workflow state, job runner, toasts, theme
+  pages/                     # Dashboard, Organizer, ScanResults, Preview, Summary,
+                             # SmartRules, Categories, Duplicates, History, Settings
+  components/                # Reusable UI primitives, Sidebar, Stepper, InsightsPanel, Onboarding
+  utils/                     # Categories/constants, formatting, insights, layouts, presets
+tests/
+  *.test.js                  # 51 node:test unit & IPC integration tests
+  helpers.js                 # Temp fixtures & fake Electron IPC harness
+  ui-smoke.mjs               # Vite SSR smoke test for all pages & insight logic
+build/icon.png               # Application icon
 ```
 
 ---
 
-## 📄 License
+## License
 
 Distributed under the MIT License. See `package.json` for details.

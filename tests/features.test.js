@@ -40,7 +40,9 @@ test('first enabled matching rule wins over the extension category; disabled rul
   ];
   const res = c.classifyFile(file({ name: 'invoice.pdf' }), { extensionMap, rules });
   assert.deepStrictEqual([res.category, res.ruleId], ['Invoices', 'b']);
-  assert.strictEqual(c.classifyFile(file({ name: 'notes.pdf' }), { extensionMap, rules }).category, 'Documents');
+  const compiledRules = c.compileRules(rules);
+  assert.deepStrictEqual(c.classifyFile(file({ name: 'invoice.pdf' }), { extensionMap, compiledRules }).category, 'Invoices');
+  assert.strictEqual(c.classifyFile(file({ name: 'notes.pdf' }), { extensionMap, compiledRules }).category, 'Documents');
 });
 
 test('validateRules normalizes good rules and rejects bad ones', () => {

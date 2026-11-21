@@ -89,10 +89,14 @@ test('undoSession restores what it can and reports the rest', { skip }, async ()
 
 test('dashboard summarizes sessions and categories', { skip }, async () => {
   const history = createHistory(db);
-  await organizeFixture(history, { 'x.pdf': 'x' });
+  const { src, dest } = await organizeFixture(history, { 'x.pdf': 'x' });
   const d = history.getDashboard();
   assert.ok(d.totals.sessions >= 1);
   assert.ok(d.categoryTotals.some((c) => c.category === 'Documents'));
+  // reveal is limited to known paths (including session source/destination roots)
+  assert.ok(history.isKnownPath(src));
+  assert.ok(history.isKnownPath(dest));
+  assert.ok(!history.isKnownPath('/etc/passwd'));
 });
 
 test('settings validate, persist and ignore unknown keys', { skip }, () => {
